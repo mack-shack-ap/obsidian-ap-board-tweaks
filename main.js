@@ -4,8 +4,15 @@ const FOLDER = 'AP Scripts';
 const BOARD = 'AP Scripts/Short-Form Board.md';
 const HOME = 'AP Scripts/Home.md'; // pinned to the top of AP Scripts, opens in reading view
 // Hidden from the file explorer (they live on Home instead)
-const HIDDEN = ['AP Scripts/Home Workbench.base', 'AP Scripts/Home Library.base', BOARD];
+const HIDDEN = ['AP Scripts/Home Workbench.base', 'AP Scripts/Home Library.base',
+  'AP Scripts/Short-Form Workbench.base', 'AP Scripts/Short-Form Library.base', BOARD];
 const SCRIPT_FOLDERS = ['AP Scripts/Short-Form/', 'AP Scripts/Long-Form/'];
+const SF_HOME = 'AP Scripts/Short-Form/Short-Form Home.md'; // pinned to the top of Short-Form
+const DASHBOARDS = [HOME, SF_HOME];
+// Which scripts each dashboard counts and lists
+const SCOPES = { [HOME]: SCRIPT_FOLDERS, [SF_HOME]: ['AP Scripts/Short-Form/'] };
+// Folder path -> note pinned to the top of it in the file explorer
+const PINS = { 'AP Scripts': HOME, 'AP Scripts/Short-Form': SF_HOME };
 const STAGES = {
   'Ideas': ['Ideas', 'Ideating', 'Not started'],
   'Scripting': ['Scripting', 'In progress'],
@@ -53,11 +60,13 @@ function statusSlug(st) {
 }
 
 class RecentView extends MarkdownRenderChild {
-  constructor(el, plugin, count) {
+  constructor(el, plugin, count, folders, sourcePath) {
     super(el);
     this.plugin = plugin;
     this.app = plugin.app;
     this.n = count;
+    this.folders = folders;
+    this.sourcePath = sourcePath;
     this.hoverPopover = null;
     this.refresh = debounce(() => this.render(), 1000, true);
   }
@@ -69,8 +78,8 @@ class RecentView extends MarkdownRenderChild {
   }
   render() {
     const files = this.app.vault.getMarkdownFiles().filter((f) => {
-      if (!SCRIPT_FOLDERS.some((p) => f.path.startsWith(p))) return false;
-      if (/ Board$/.test(f.basename)) return false;
+      if (!this.folders.some((p) => f.path.startsWith(p))) return false;
+      if (/ Board$/.test(f.basename) || DASHBOARDS.includes(f.path)) return false;
       const fm = (this.app.metadataCache.getFileCache(f) || {}).frontmatter || {};
       return ![].concat(fm.tags || []).includes('hub');
     }).sort((a, b) => b.stat.mtime - a.stat.mtime).slice(0, this.n);
@@ -97,7 +106,7 @@ class RecentView extends MarkdownRenderChild {
       card.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
       card.addEventListener('mouseover', (event) => {
         this.app.workspace.trigger('hover-link', {
-          event, source: 'ap-board', hoverParent: this, targetEl: card, linktext: f.path, sourcePath: HOME,
+          event, source: 'ap-board', hoverParent: this, targetEl: card, linktext: f.path, sourcePath: this.sourcePath,
         });
       });
     }
@@ -208,17 +217,18 @@ module.exports = class APBoardTweaks extends Plugin {
     // 1c) ```ap-recent``` block: last edited scripts as board-style cards
     this.registerMarkdownCodeBlockProcessor('ap-recent', (src, el, ctx) => {
       const n = parseInt(src.trim(), 10) || 10;
-      ctx.addChild(new RecentView(el, this, n));
+      ctx.addChild(new RecentView(el, this, n, SCOPES[ctx.sourcePath] || SCRIPT_FOLDERS, ctx.sourcePath));
     });
 
     // 2) Live counts on the Home pipeline and browse shelves
     this.registerMarkdownPostProcessor((el, ctx) => {
-      if (ctx.sourcePath !== HOME) return;
+      const folders = SCOPES[ctx.sourcePath];
+      if (!folders) return;
       el.querySelectorAll('.callout[data-callout="ap-pipeline"] a.internal-link').forEach((a) => {
         const stage = a.textContent.trim();
         const statuses = STAGES[stage];
         if (!statuses) return;
-        const n = this.count((fm) => statuses.includes(fm.status));
+        const n = this.count((fm) => statuses.includes(fm.status), folders);
         a.empty();
         a.createSpan({ cls: 'ap-count', text: String(n) });
         a.createSpan({ cls: 'ap-stage', text: stage });
@@ -231,7 +241,7 @@ module.exports = class APBoardTweaks extends Plugin {
         if (!test) return;
         c.querySelectorAll('a.internal-link').forEach((a) => {
           const name = a.textContent.trim();
-          const n = this.count((fm) => test(fm, name));
+          const n = this.count((fm) => test(fm, name), folders);
           a.createSpan({ cls: 'ap-shelf-count', text: String(n) });
         });
       });
@@ -239,10 +249,10 @@ module.exports = class APBoardTweaks extends Plugin {
 
     // 3) Home opens in reading view so the layout never shows raw markup
     this.registerEvent(this.app.workspace.on('file-open', (file) => {
-      if (file && file.path === HOME) setTimeout(() => this.toReading(), 0);
+      if (file && DASHBOARDS.includes(file.path)) setTimeout(() => this.toReading(), 0);
     }));
 
-    // 4) File explorer: hide helpers, pin Home to the top of AP Scripts
+    // 4) File explorer: hide helpers, pin each dashboard to the top of its folder
     this.app.workspace.onLayoutReady(() => { this.patchExplorer(); this.toReading(); });
   }
 
@@ -277,10 +287,10 @@ module.exports = class APBoardTweaks extends Plugin {
     this.app.workspace.getLeaf('tab').openFile(file);
   }
 
-  count(pred) {
+  count(pred, folders = SCRIPT_FOLDERS) {
     let n = 0;
     for (const f of this.app.vault.getMarkdownFiles()) {
-      if (!SCRIPT_FOLDERS.some((p) => f.path.startsWith(p))) continue;
+      if (!folders.some((p) => f.path.startsWith(p)) || DASHBOARDS.includes(f.path)) continue;
       const fm = (this.app.metadataCache.getFileCache(f) || {}).frontmatter;
       if (fm && pred(fm)) n++;
     }
@@ -289,7 +299,7 @@ module.exports = class APBoardTweaks extends Plugin {
 
   toReading() {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!view || !view.file || view.file.path !== HOME || view.getMode() === 'preview') return;
+    if (!view || !view.file || !DASHBOARDS.includes(view.file.path) || view.getMode() === 'preview') return;
     const state = view.leaf.getViewState();
     state.state = Object.assign({}, state.state, { mode: 'preview' });
     view.leaf.setViewState(state);
@@ -307,9 +317,10 @@ module.exports = class APBoardTweaks extends Plugin {
     const orig = proto.getSortedFolderItems;
     proto.getSortedFolderItems = function (folder, ...args) {
       const items = orig.call(this, folder, ...args);
-      if (folder && folder.path === FOLDER && Array.isArray(items)) {
+      const pin = folder && PINS[folder.path];
+      if (pin && Array.isArray(items)) {
         const kept = items.filter((it) => !(it && it.file && HIDDEN.includes(it.file.path)));
-        const h = kept.findIndex((it) => it && it.file && it.file.path === HOME);
+        const h = kept.findIndex((it) => it && it.file && it.file.path === pin);
         if (h > 0) kept.unshift(kept.splice(h, 1)[0]);
         return kept;
       }
