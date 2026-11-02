@@ -5,7 +5,8 @@ const BOARD = 'AP Scripts/Short-Form Board.md';
 const HOME = 'AP Scripts/Home.md'; // pinned to the top of AP Scripts, opens in reading view
 // Hidden from the file explorer (they live on Home instead)
 const HIDDEN = ['AP Scripts/Home Workbench.base', 'AP Scripts/Home Library.base',
-  'AP Scripts/Short-Form Workbench.base', 'AP Scripts/Short-Form Library.base', BOARD];
+  'AP Scripts/Short-Form Workbench.base', 'AP Scripts/Short-Form Library.base',
+  'AP Scripts/Views', BOARD];
 const SCRIPT_FOLDERS = ['AP Scripts/Short-Form/', 'AP Scripts/Long-Form/'];
 const SF_HOME = 'AP Scripts/Short-Form/Short-Form Home.md'; // pinned to the top of Short-Form
 const DASHBOARDS = [HOME, SF_HOME];
