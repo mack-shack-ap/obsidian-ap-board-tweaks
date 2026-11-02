@@ -11,8 +11,11 @@ const SF_HOME = 'AP Scripts/Short-Form/Short-Form Home.md'; // pinned to the top
 const DASHBOARDS = [HOME, SF_HOME];
 // Which scripts each dashboard counts and lists
 const SCOPES = { [HOME]: SCRIPT_FOLDERS, [SF_HOME]: ['AP Scripts/Short-Form/'] };
-// Folder path -> note pinned to the top of it in the file explorer
-const PINS = { 'AP Scripts': HOME, 'AP Scripts/Short-Form': SF_HOME };
+// Folder path -> items pinned to the top of it in the file explorer, in order
+const PINS = {
+  'AP Scripts': [HOME, 'AP Scripts/Short-Form'],
+  'AP Scripts/Short-Form': [SF_HOME],
+};
 const STAGES = {
   'Ideas': ['Ideas', 'Ideating', 'Not started'],
   'Scripting': ['Scripting', 'In progress'],
@@ -320,8 +323,10 @@ module.exports = class APBoardTweaks extends Plugin {
       const pin = folder && PINS[folder.path];
       if (pin && Array.isArray(items)) {
         const kept = items.filter((it) => !(it && it.file && HIDDEN.includes(it.file.path)));
-        const h = kept.findIndex((it) => it && it.file && it.file.path === pin);
-        if (h > 0) kept.unshift(kept.splice(h, 1)[0]);
+        for (const p of [...pin].reverse()) {
+          const h = kept.findIndex((it) => it && it.file && it.file.path === p);
+          if (h > 0) kept.unshift(kept.splice(h, 1)[0]);
+        }
         return kept;
       }
       return items;

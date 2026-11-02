@@ -1,7 +1,7 @@
 {
   "id": "ap-board-tweaks",
   "name": "AP Board Tweaks",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "minAppVersion": "1.6.0",
   "description": "AP Scripts Home: board, recent scripts, live pipeline counts, explorer tweaks, plus the Americana Pipedream look on mobile.",
   "author": "Mack",
